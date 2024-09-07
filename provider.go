@@ -9,44 +9,114 @@ import (
 	"github.com/libdns/libdns"
 )
 
-// TODO: Providers must not require additional provisioning steps by the callers; it
-// should work simply by populating a struct and calling methods on it. If your DNS
-// service requires long-lived state or some extra provisioning step, do it implicitly
-// when methods are called; sync.Once can help with this, and/or you can use a
-// sync.(RW)Mutex in your Provider struct to synchronize implicit provisioning.
-
-// Provider facilitates DNS record manipulation with <TODO: PROVIDER NAME>.
+// Provider facilitates DNS record manipulation with Nanelo
 type Provider struct {
-	// TODO: put config fields here (with snake_case json
-	// struct tags on exported fields), for example:
 	APIToken string `json:"api_token,omitempty"`
 }
 
-// GetRecords lists all the records in the zone.
-func (p *Provider) GetRecords(ctx context.Context, zone string) ([]libdns.Record, error) {
-	return nil, fmt.Errorf("TODO: not implemented")
+type APIResponse struct {
+	OK  bool `json:"ok"`
+	Error   *string `json:"error"`
+	Result  *map[string]interface{} `json:"result"`
 }
 
 // AppendRecords adds records to the zone. It returns the records that were added.
 func (p *Provider) AppendRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
-	return nil, fmt.Errorf("TODO: not implemented")
-}
+	baseURL, _ := url.Parse("https://api.nanelo.com/v1")
+	baseURL = baseURL.JoinPath(p.APIToken)
+	baseURL = baseURL.JoinPath("dns")
+	baseURL = baseURL.JoinPath("addrecord")
 
-// SetRecords sets the records in the zone, either by updating existing records or creating new ones.
-// It returns the updated records.
-func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
-	return nil, fmt.Errorf("TODO: not implemented")
-}
+	for _, rec := range records {
+		endpoint := baseURL
+		query := endpoint.Query()
+		query.Set("domain", zone)
+		query.Set("name", rec.Name)
+		query.Set("type", rec.Type)
+		query.Set("value", rec.Value)
+		query.Set("ttl", fmt.Sprintf("%f", rec.TTL.Seconds()))
 
+		if rec.Priority != nil {
+			query.Set("priority", fmt.Sprintf("%d", rec.Priority))
+		}
+
+		endpoint.RawQuery = query.Encode()
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), http.NoBody)
+		if err != nil {
+			return nil, err
+		}
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+
+		var apiResponse APIResponse
+		err = json.NewDecoder(resp.Body).Decode(&apiResponse)
+		if err != nil {
+			return nil, err
+		}
+
+		if apiResponse.Error != nil {
+			return nil, fmt.Errorf(*apiResponse.Error)
+		}
+		if apiResponse.OK == false {
+			return nil, fmt.Errorf("Unknown Error when trying to create the DNS Record")
+		}
+	}
+	return records, nil
+}
 // DeleteRecords deletes the records from the zone. It returns the records that were deleted.
 func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
-	return nil, fmt.Errorf("TODO: not implemented")
+	baseURL, _ := url.Parse("https://api.nanelo.com/v1")
+	baseURL = baseURL.JoinPath(p.APIToken)
+	baseURL = baseURL.JoinPath("dns")
+	baseURL = baseURL.JoinPath("deleterecord")
+	
+	for _, rec := range records {
+		endpoint := baseURL
+		query := endpoint.Query()
+		query.Set("domain", zone)
+		query.Set("name", rec.Name)
+		query.Set("type", rec.Type)
+		query.Set("value", rec.Value)
+		query.Set("ttl", fmt.Sprintf("%f", rec.TTL.Seconds()))
+
+		if rec.Priority != nil {
+			query.Set("priority", fmt.Sprintf("%d", rec.Priority))
+		}
+
+		endpoint.RawQuery = query.Encode()
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), http.NoBody)
+		if err != nil {
+			return nil, err
+		}
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+
+		var apiResponse APIResponse
+		err = json.NewDecoder(resp.Body).Decode(&apiResponse)
+		if err != nil {
+			return nil, err
+		}
+
+		if apiResponse.Error != nil {
+			return nil, fmt.Errorf(*apiResponse.Error)
+		}
+		if apiResponse.OK == false {
+			return nil, fmt.Errorf("Unknown Error when trying to create the DNS Record")
+		}
+	}
+	return records, nil
 }
 
 // Interface guards
 var (
-	_ libdns.RecordGetter   = (*Provider)(nil)
 	_ libdns.RecordAppender = (*Provider)(nil)
-	_ libdns.RecordSetter   = (*Provider)(nil)
 	_ libdns.RecordDeleter  = (*Provider)(nil)
 )
