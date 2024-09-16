@@ -5,6 +5,9 @@ package nanelo
 import (
 	"context"
 	"fmt"
+	"encoding/json"
+	"net/url"
+	"net/http"
 
 	"github.com/libdns/libdns"
 )
@@ -36,7 +39,7 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, records []lib
 		query.Set("value", rec.Value)
 		query.Set("ttl", fmt.Sprintf("%f", rec.TTL.Seconds()))
 
-		if rec.Priority != nil {
+		if rec.Priority > 0 {
 			query.Set("priority", fmt.Sprintf("%d", rec.Priority))
 		}
 
@@ -83,7 +86,7 @@ func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []lib
 		query.Set("value", rec.Value)
 		query.Set("ttl", fmt.Sprintf("%f", rec.TTL.Seconds()))
 
-		if rec.Priority != nil {
+		if rec.Priority > 0 {
 			query.Set("priority", fmt.Sprintf("%d", rec.Priority))
 		}
 
