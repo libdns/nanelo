@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"net/url"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/libdns/libdns"
@@ -33,17 +32,20 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, records []lib
 	var added []libdns.Record
 
 	for _, rec := range records {
+		rr, ok := rec.(*libdns.RR)
+		if !ok {
+			return nil, fmt.Errorf("unsupported record type: %T", rec)
+		}
+
 		endpoint := baseURL
 		query := endpoint.Query()
 		query.Set("domain", zone)
-		query.Set("name", rec.Name)
-		query.Set("type", rec.Type)
-		query.Set("value", rec.Value)
-		query.Set("ttl", fmt.Sprintf("%f", rec.TTL.Seconds()))
+		query.Set("name", rr.Name)
+		query.Set("type", rr.Type)
+		query.Set("value", rr.Data)
+		query.Set("ttl", fmt.Sprintf("%f", rr.TTL.Seconds()))
 
-		if rec.Priority > 0 {
-			query.Set("priority", fmt.Sprintf("%d", rec.Priority))
-		}
+		// TODO: support setting the "priority"
 
 		endpoint.RawQuery = query.Encode()
 
@@ -71,12 +73,10 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, records []lib
 			return nil, fmt.Errorf("Unknown Error when trying to create the DNS Record")
 		}
 
-		// Set ID for libdns v1.0.0
-		rec.ID = fmt.Sprintf("%s:%s:%s", rec.Name, rec.Type, rec.Value)
-		if rec.TTL == 0 {
-			rec.TTL = time.Minute // Default TTL if not set
+		if rr.TTL == 0 {
+			rr.TTL = time.Minute // Default TTL if not set
 		}
-		added = append(added, rec)
+		added = append(added, rr)
 	}
 
 	return added, nil
@@ -90,29 +90,20 @@ func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []lib
 	var deleted []libdns.Record
 
 	for _, rec := range records {
-		// Parse ID if present
-		if rec.ID != "" {
-			parts := strings.Split(rec.ID, ":")
-			if len(parts) == 3 {
-				rec.Name = parts[0]
-				rec.Type = parts[1]
-				rec.Value = parts[2]
-			} else {
-				return nil, fmt.Errorf("invalid record ID format: %s", rec.ID)
-			}
+		rr, ok := rec.(*libdns.RR)
+		if !ok {
+			return nil, fmt.Errorf("unsupported record type: %T", rec)
 		}
 
 		endpoint := baseURL
 		query := endpoint.Query()
 		query.Set("domain", zone)
-		query.Set("name", rec.Name)
-		query.Set("type", rec.Type)
-		query.Set("value", rec.Value)
-		query.Set("ttl", fmt.Sprintf("%f", rec.TTL.Seconds()))
+		query.Set("name", rr.Name)
+		query.Set("type", rr.Type)
+		query.Set("value", rr.Data)
+		query.Set("ttl", fmt.Sprintf("%f", rr.TTL.Seconds()))
 
-		if rec.Priority > 0 {
-			query.Set("priority", fmt.Sprintf("%d", rec.Priority))
-		}
+		// TODO: support setting the "priority"
 
 		endpoint.RawQuery = query.Encode()
 
