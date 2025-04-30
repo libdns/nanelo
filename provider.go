@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"net/url"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/libdns/libdns"
 )
@@ -18,17 +20,17 @@ type Provider struct {
 }
 
 type APIResponse struct {
-	OK  bool `json:"ok"`
-	Error   *string `json:"error"`
-	Result  *map[string]interface{} `json:"result"`
+	OK     bool                    `json:"ok"`
+	Error  *string                 `json:"error"`
+	Result *map[string]interface{} `json:"result"`
 }
 
 // AppendRecords adds records to the zone. It returns the records that were added.
 func (p *Provider) AppendRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
 	baseURL, _ := url.Parse("https://api.nanelo.com/v1")
-	baseURL = baseURL.JoinPath(p.APIToken)
-	baseURL = baseURL.JoinPath("dns")
-	baseURL = baseURL.JoinPath("addrecord")
+	baseURL = baseURL.JoinPath(p.APIToken, "dns", "addrecord")
+
+	var added []libdns.Record
 
 	for _, rec := range records {
 		endpoint := baseURL
@@ -54,6 +56,7 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, records []lib
 		if err != nil {
 			return nil, err
 		}
+		defer resp.Body.Close()
 
 		var apiResponse APIResponse
 		err = json.NewDecoder(resp.Body).Decode(&apiResponse)
@@ -67,17 +70,38 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, records []lib
 		if apiResponse.OK == false {
 			return nil, fmt.Errorf("Unknown Error when trying to create the DNS Record")
 		}
+
+		// Set ID for libdns v1.0.0
+		rec.ID = fmt.Sprintf("%s:%s:%s", rec.Name, rec.Type, rec.Value)
+		if rec.TTL == 0 {
+			rec.TTL = time.Minute // Default TTL if not set
+		}
+		added = append(added, rec)
 	}
-	return records, nil
+
+	return added, nil
 }
+
 // DeleteRecords deletes the records from the zone. It returns the records that were deleted.
 func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
 	baseURL, _ := url.Parse("https://api.nanelo.com/v1")
-	baseURL = baseURL.JoinPath(p.APIToken)
-	baseURL = baseURL.JoinPath("dns")
-	baseURL = baseURL.JoinPath("deleterecord")
-	
+	baseURL = baseURL.JoinPath(p.APIToken, "dns", "deleterecord")
+
+	var deleted []libdns.Record
+
 	for _, rec := range records {
+		// Parse ID if present
+		if rec.ID != "" {
+			parts := strings.Split(rec.ID, ":")
+			if len(parts) == 3 {
+				rec.Name = parts[0]
+				rec.Type = parts[1]
+				rec.Value = parts[2]
+			} else {
+				return nil, fmt.Errorf("invalid record ID format: %s", rec.ID)
+			}
+		}
+
 		endpoint := baseURL
 		query := endpoint.Query()
 		query.Set("domain", zone)
@@ -101,6 +125,7 @@ func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []lib
 		if err != nil {
 			return nil, err
 		}
+		defer resp.Body.Close()
 
 		var apiResponse APIResponse
 		err = json.NewDecoder(resp.Body).Decode(&apiResponse)
@@ -114,8 +139,11 @@ func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []lib
 		if apiResponse.OK == false {
 			return nil, fmt.Errorf("Unknown Error when trying to create the DNS Record")
 		}
+
+		deleted = append(deleted, rec)
 	}
-	return records, nil
+
+	return deleted, nil
 }
 
 // Interface guards
