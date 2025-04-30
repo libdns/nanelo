@@ -32,10 +32,7 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, records []lib
 	var added []libdns.Record
 
 	for _, rec := range records {
-		rr, ok := rec.(*libdns.RR)
-		if !ok {
-			return nil, fmt.Errorf("unsupported record type: %T", rec)
-		}
+		rr := rec.RR()
 
 		endpoint := baseURL
 		query := endpoint.Query()
@@ -69,8 +66,8 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, records []lib
 		if apiResponse.Error != nil {
 			return nil, fmt.Errorf(*apiResponse.Error)
 		}
-		if apiResponse.OK == false {
-			return nil, fmt.Errorf("Unknown Error when trying to create the DNS Record")
+		if !apiResponse.OK {
+			return nil, fmt.Errorf("unknown error when trying to create the DNS record")
 		}
 
 		if rr.TTL == 0 {
@@ -90,10 +87,7 @@ func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []lib
 	var deleted []libdns.Record
 
 	for _, rec := range records {
-		rr, ok := rec.(*libdns.RR)
-		if !ok {
-			return nil, fmt.Errorf("unsupported record type: %T", rec)
-		}
+		rr := rec.RR()
 
 		endpoint := baseURL
 		query := endpoint.Query()
@@ -127,8 +121,8 @@ func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []lib
 		if apiResponse.Error != nil {
 			return nil, fmt.Errorf(*apiResponse.Error)
 		}
-		if apiResponse.OK == false {
-			return nil, fmt.Errorf("Unknown Error when trying to create the DNS Record")
+		if !apiResponse.OK {
+			return nil, fmt.Errorf("unknown error when trying to delete the DNS record")
 		}
 
 		deleted = append(deleted, rec)
